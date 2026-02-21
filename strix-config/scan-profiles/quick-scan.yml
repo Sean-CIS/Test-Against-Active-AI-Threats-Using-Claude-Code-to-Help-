@@ -1,0 +1,21 @@
+# Quick Scan Profile — for CI/CD pull request checks
+# Fastest scan mode, focuses on high-impact vulnerabilities in changed code
+
+target: ./
+scan_mode: quick
+
+instructions: >
+  Quick scan for critical vulnerabilities only. Focus on SQL injection,
+  command injection, authentication bypass, and IDOR. Skip low-severity
+  findings.
+
+output:
+  format: json
+  path: ./strix-reports/
+
+agents:
+  max_concurrent: 2
+  recon: true
+  auth_testing: true
+  exploitation: true
+  reporting: true

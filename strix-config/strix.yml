@@ -1,0 +1,33 @@
+# =============================================================================
+# Strix Configuration Template
+# =============================================================================
+# Copy this file and customize for your project.
+# Docs: https://docs.strix.ai
+
+# Target to scan (local path, GitHub URL, or live URL)
+target: ./
+
+# Scan mode: quick, standard, full
+scan_mode: standard
+
+# Natural language instructions to guide the AI agents
+instructions: >
+  Focus on OWASP Top 10 vulnerabilities. Pay special attention to
+  authentication, access control, and injection flaws. Test all API
+  endpoints for authorization bypass.
+
+# Output configuration
+output:
+  format: json        # json, html, or both
+  path: ./strix-reports/
+
+# Agent behavior
+agents:
+  # Maximum number of concurrent agents
+  max_concurrent: 3
+
+  # Enable/disable specific agent types
+  recon: true
+  auth_testing: true
+  exploitation: true
+  reporting: true

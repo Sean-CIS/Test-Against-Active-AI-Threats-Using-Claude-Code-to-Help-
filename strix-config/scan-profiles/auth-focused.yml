@@ -1,0 +1,28 @@
+# Auth-Focused Scan Profile — authentication and access control deep dive
+# Use when auth changes are made or for targeted access control audits
+
+target: ./
+scan_mode: standard
+
+instructions: >
+  Deep dive on authentication and authorization. Test for:
+  - SQL injection in login forms
+  - Authentication bypass techniques
+  - Session fixation and hijacking
+  - JWT token manipulation (if applicable)
+  - IDOR on all resource endpoints
+  - Privilege escalation from user to admin
+  - Missing authorization checks on API endpoints
+  - Password reset flow vulnerabilities
+  - Brute force resistance
+
+output:
+  format: json
+  path: ./strix-reports/
+
+agents:
+  max_concurrent: 3
+  recon: true
+  auth_testing: true
+  exploitation: true
+  reporting: true

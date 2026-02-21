@@ -1,0 +1,140 @@
+###############################################################################
+# AI Security Scan — Strix on every Pull Request
+#
+# Runs Strix in quick mode on PRs, full mode on weekly schedule.
+# Blocks merges if critical or high severity vulnerabilities are found.
+###############################################################################
+
+name: AI Security Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.ts'
+      - '**.go'
+      - '**.java'
+      - '**.rb'
+      - '**.php'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+  schedule:
+    # Full scan every Monday at 2 AM UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      scan_mode:
+        description: 'Scan mode (quick, standard, full)'
+        required: false
+        default: 'standard'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache Strix data
+        uses: actions/cache@v4
+        with:
+          path: ~/.strix/cache
+          key: strix-cache-${{ hashFiles('**/requirements.txt', '**/package-lock.json') }}
+          restore-keys: strix-cache-
+
+      - name: Install Strix
+        run: |
+          python -m pip install --upgrade pip pipx
+          pipx install strix-agent
+
+      - name: Determine scan mode
+        id: scan-mode
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "mode=full" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.scan_mode }}" >> $GITHUB_OUTPUT
+          else
+            echo "mode=quick" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Strix Security Scan
+        run: |
+          strix -n \
+            -t ./ \
+            --scan-mode ${{ steps.scan-mode.outputs.mode }} \
+            --output json \
+            --output-path ./strix-report.json
+        env:
+          STRIX_LLM: ${{ vars.STRIX_LLM || 'openai/gpt-4o' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-security-report-${{ github.run_number }}
+          path: ./strix-report.json
+          retention-days: 90
+
+      - name: Evaluate findings and fail on critical/high
+        if: always()
+        run: |
+          if [ ! -f ./strix-report.json ]; then
+            echo "::warning::No scan report found. Scan may have failed."
+            exit 0
+          fi
+
+          python3 << 'SCRIPT'
+          import json
+          import sys
+
+          with open("./strix-report.json") as f:
+              report = json.load(f)
+
+          findings = report.get("findings", [])
+          if not findings:
+              print("No vulnerabilities found.")
+              sys.exit(0)
+
+          by_severity = {}
+          for finding in findings:
+              sev = finding.get("severity", "UNKNOWN")
+              by_severity.setdefault(sev, []).append(finding)
+
+          print(f"Total findings: {len(findings)}")
+          for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
+              count = len(by_severity.get(sev, []))
+              if count > 0:
+                  print(f"  {sev}: {count}")
+
+          critical_high = by_severity.get("CRITICAL", []) + by_severity.get("HIGH", [])
+          if critical_high:
+              print()
+              print("BLOCKING FINDINGS:")
+              for f in critical_high:
+                  title = f.get("title", "Untitled")
+                  sev = f.get("severity", "?")
+                  loc = f.get("location", "unknown")
+                  print(f"  [{sev}] {title} — {loc}")
+              print()
+              print(f"::error::{len(critical_high)} critical/high vulnerabilities found. Fix before merging.")
+              sys.exit(1)
+
+          print("No critical or high severity findings. Scan passed.")
+          SCRIPT

@@ -1,0 +1,15 @@
+###############################################################################
+# Vulnerable Test Application Stack
+# FOR SECURITY TESTING ONLY — DO NOT DEPLOY TO PRODUCTION
+###############################################################################
+
+services:
+  vuln-app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped

@@ -1,0 +1,23 @@
+# Full Scan Profile — comprehensive security assessment
+# Use for scheduled scans or pre-release security gates
+
+target: ./
+scan_mode: full
+
+instructions: >
+  Perform a comprehensive security assessment covering all OWASP Top 10
+  categories. Test every endpoint, parameter, and input vector. Include
+  business logic testing, race condition checks, and infrastructure
+  misconfiguration detection. Attempt to chain vulnerabilities for
+  maximum impact demonstration.
+
+output:
+  format: json
+  path: ./strix-reports/
+
+agents:
+  max_concurrent: 5
+  recon: true
+  auth_testing: true
+  exploitation: true
+  reporting: true
