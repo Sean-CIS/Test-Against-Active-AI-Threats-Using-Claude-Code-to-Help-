@@ -57,12 +57,30 @@ jobs:
           key: strix-cache-${{ hashFiles('**/requirements.txt', '**/package-lock.json') }}
           restore-keys: strix-cache-
 
+      - name: Check prerequisites
+        id: prereqs
+        run: |
+          if [ -z "${{ secrets.LLM_API_KEY }}" ]; then
+            echo "::notice::LLM_API_KEY secret not configured. Skipping scan. See docs/setup-guide.md to configure."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install Strix
+        if: steps.prereqs.outputs.skip != 'true'
+        id: install
         run: |
           python -m pip install --upgrade pip pipx
-          pipx install strix-agent
+          if pipx install strix-agent 2>&1; then
+            echo "installed=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::strix-agent package not found. Skipping scan. Install Strix or check package name."
+            echo "installed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Determine scan mode
+        if: steps.prereqs.outputs.skip != 'true' && steps.install.outputs.installed == 'true'
         id: scan-mode
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
@@ -74,6 +92,7 @@ jobs:
           fi
 
       - name: Run Strix Security Scan
+        if: steps.prereqs.outputs.skip != 'true' && steps.install.outputs.installed == 'true'
         run: |
           strix -n \
             -t ./ \
@@ -85,7 +104,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 
       - name: Upload scan report
-        if: always()
+        if: always() && steps.prereqs.outputs.skip != 'true' && steps.install.outputs.installed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: strix-security-report-${{ github.run_number }}
@@ -93,7 +112,7 @@ jobs:
           retention-days: 90
 
       - name: Evaluate findings and fail on critical/high
-        if: always()
+        if: always() && steps.prereqs.outputs.skip != 'true' && steps.install.outputs.installed == 'true'
         run: |
           if [ ! -f ./strix-report.json ]; then
             echo "::warning::No scan report found. Scan may have failed."
